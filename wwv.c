@@ -2,6 +2,22 @@
 // Framework code for creating a kernel driver
 // that creates the digital data from WWV station
 // Pass in time/date data through ioctl.
+
+// Choose one of the following for initialization:
+// PLATFORM_DRIVER uses the probe() and remove() function
+//   to automagically detect devices using platform_driver
+// STD_INIT uses the older style module initialization
+
+//#define PLATFORM_DRIVER
+#define STD_INIT
+
+#if defined(PLATFORM_DRIVER) && defined(STD_INIT)
+#error Cannot define both PLATFORM_DRIVER and STD_INIT
+#error Define only one
+#endif
+
+#define WWV_GPIO_4 (4)
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
@@ -120,7 +136,12 @@ static long wwv_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
 	}
 
 	// Clean up
+#ifdef PLATFORM_DRIVER
 	gpiod_set_value(wwv_dat->gpio_wwv,0);
+#endif
+#ifdef STD_INIT
+	gpio_set_value(WWV_GPIO_4,0);
+#endif
 
 fail:
 
@@ -165,6 +186,14 @@ static const struct file_operations wwv_fops = {
 	.unlocked_ioctl=wwv_ioctl,	// ioctl
 };
 
+// Sets device node permission on the /dev device special file
+static char *wwv_devnode(struct device *dev, umode_t *mode)
+{
+	if (mode) *mode = 0666;
+	return NULL;
+}
+
+#ifdef PLATFORM_DRIVER
 static struct gpio_desc *wwv_dt_obtain_pin(struct device *dev, struct device_node *parent, char *name, int init_val)
 {
 	struct device_node *dn_child=NULL;	// DT child
@@ -241,14 +270,6 @@ fail:
     if (dn_child) of_node_put(dn_child);
 
 	return gpiod_pin;
-}
-
-
-// Sets device node permission on the /dev device special file
-static char *wwv_devnode(struct device *dev, umode_t *mode)
-{
-	if (mode) *mode = 0666;
-	return NULL;
 }
 
 // My data is going to go in either platform_data or driver_data
@@ -406,6 +427,113 @@ static struct platform_driver wwv_driver = {
 };
 
 module_platform_driver(wwv_driver);
+
+#endif
+
+#ifdef STD_INIT
+// GPIO pin 4 for an led
+
+static struct wwv_data_t *wwv_dat;		// Data to be passed around the calls
+
+// Module init
+static int __init rpiwwv_minit(void)
+{
+	int ret=-1;	// Return value
+
+
+	// Allocate device driver data and save
+	wwv_dat=kmalloc(sizeof(struct wwv_data_t),GFP_ATOMIC);
+	if (wwv_dat==NULL) {
+		printk(KERN_INFO "Memory allocation failed\n");
+		return -ENOMEM;
+	}
+
+	memset(wwv_dat,0,sizeof(struct wwv_data_t));
+
+	// Request the pin - release with devm_gpio_free() by pin number
+	ret=gpio_request(WWV_GPIO_4,"wwv");
+	if (ret<0) {
+		printk(KERN_ERR "Cannot get gpio Pin 4\n");
+		goto fail;
+	}
+	wwv_dat->gpio_wwv=(struct gpio_desc *)1;
+	// Make sure the pin is set correctly
+	ret=gpio_direction_output(WWV_GPIO_4,0);
+	if (ret<0) {
+		printk(KERN_ERR "Cannot set gpio Pin 4 direction\n");
+		goto fail;
+	}
+
+	// Create the device - automagically assign a major number
+	wwv_dat->major=register_chrdev(0,"wwv",&wwv_fops);
+	if (wwv_dat->major<0) {
+		printk(KERN_INFO "Failed to register character device\n");
+		ret=wwv_dat->major;
+		goto fail;
+	}
+
+	// Create a class instance
+	wwv_dat->wwv_class=class_create(THIS_MODULE, "wwv_class");
+	if (IS_ERR(wwv_dat->wwv_class)) {
+		printk(KERN_INFO "Failed to create class\n");
+		ret=PTR_ERR(wwv_dat->wwv_class);
+		goto fail;
+	}
+
+	// Setup the device so the device special file is created with 0666 perms
+	wwv_dat->wwv_class->devnode=wwv_devnode;
+	wwv_dat->wwv_dev=device_create(wwv_dat->wwv_class,NULL,MKDEV(wwv_dat->major,0),(void *)wwv_dat,"wwv");
+	if (IS_ERR(wwv_dat->wwv_dev)) {
+		printk(KERN_INFO "Failed to create device file\n");
+		ret=PTR_ERR(wwv_dat->wwv_dev);
+		goto fail;
+	}
+
+	wwv_data_fops=wwv_dat;
+	
+	printk(KERN_INFO "Registered\n");
+	return 0;
+
+fail:
+	// Device cleanup
+	if (wwv_dat->wwv_dev) device_destroy(wwv_dat->wwv_class,MKDEV(wwv_dat->major,0));
+	// Class cleanup
+	if (wwv_dat->wwv_class) class_destroy(wwv_dat->wwv_class);
+	// char dev clean up
+	if (wwv_dat->major) unregister_chrdev(wwv_dat->major,"wwv");
+
+	// Free GPIO 4
+	if (wwv_dat->gpio_wwv) gpio_free(WWV_GPIO_4);
+
+	kfree(wwv_dat);
+	printk(KERN_INFO "WWV Failed\n");
+	return ret;
+}
+
+// Module removal
+static void __exit rpiwwv_mcleanup(void)
+{
+	// Device cleanup
+	device_destroy(wwv_dat->wwv_class,MKDEV(wwv_dat->major,0));
+	// Class cleanup
+	class_destroy(wwv_dat->wwv_class);
+	// Remove char dev
+	unregister_chrdev(wwv_dat->major,"wwv");
+
+	// Free the gpio pins with devm_gpio_free() & gpiod_put()
+	gpio_free(WWV_GPIO_4);
+	
+	kfree(wwv_dat);
+
+	printk(KERN_INFO "Removed\n");
+
+	return;
+}
+
+module_init(rpiwwv_minit);
+module_exit(rpiwwv_mcleanup);
+
+#endif
 
 MODULE_DESCRIPTION("WWV pin modulator");
 MODULE_LICENSE("GPL");
