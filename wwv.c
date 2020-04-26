@@ -98,6 +98,51 @@ static struct wwv_data_t *wwv_data_fops;
 
 // ADD YOUR WWV ENCODING/TRANSMITING/MANAGEMENT FUNCTIONS BELOW THIS LINE
 
+/*
+ * Outputs LED signal representing bit in wwv format, 2 meaning position
+ * identfier
+ */
+static int wwv_encode(int pin, int input)
+{
+        /*
+         * Variables for the start time, change in time, and the threshold for
+         * turning on and off in seconds
+         */
+        float threshold;
+
+        gpio_export(pin);
+        usleep(100);
+        gpio_direction(pin, "out");
+
+        // Determines if input is valid or not
+        switch (input) {
+                case 0:
+                        threshold = 0.170;
+                        break;
+                case 1:
+                        threshold = 0.470;
+                        break;
+                case 2:
+                        threshold = 0.770;
+                        break;
+                default:
+                        return 1;
+        }
+
+        // Loops around for one second, creates 100Hz tone for given time
+        for (uint32_t i = 0; i < (uint32_t)(100 * threshold); i++) {
+                        gpio_value(pin, 1);
+                        usleep(5000);
+                        gpio_value(pin, 0);
+                        usleep(5000);
+        }
+
+        // Unexport pin after use
+        usleep(700000 - 1000 * threshold);
+
+        return 0;
+}
+
 
 
 
