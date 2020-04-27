@@ -38,6 +38,7 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/gpio/consumer.h>
 #include <linux/jiffies.h>
+#include <linux/semaphore.h>
 
 #include "wwv.h"
 
@@ -52,6 +53,7 @@ struct wwv_data_t {
 	struct class *wwv_class;	// Class for auto /dev population
 	struct device *wwv_dev;	// Device for auto /dev population
 	// ADD YOUR LOCKING VARIABLE BELOW THIS LINE
+	struct semaphore *wwv_sem;		// Semaphore for locking the data
 };
 
 // ADD ANY WWV DEFINE BELOW THIS LINE
@@ -98,49 +100,42 @@ static struct wwv_data_t *wwv_data_fops;
 
 // ADD YOUR WWV ENCODING/TRANSMITING/MANAGEMENT FUNCTIONS BELOW THIS LINE
 
-/*
- * Outputs LED signal representing bit in wwv format, 2 meaning position
- * identfier
- */
+// Outputs LED signal representing bit in wwv format, 2 meaning position identfier
 static int wwv_encode(int pin, int input)
 {
-        /*
-         * Variables for the start time, change in time, and the threshold for
-         * turning on and off in seconds
-         */
-        float threshold;
+	float threshold;	// How long to play the 100Hz tone in seconds
+	long int min_sleep, max_sleep;		// Min/max sleep times for remainder of second
+	long int i;		// Counter variable
 
-        gpio_export(pin);
-        usleep(100);
-        gpio_direction(pin, "out");
+    // Determines if input is valid or not
+	switch (input) {
+		case 0:
+			threshold = 0.170;
+			break;
+		case 1:
+			threshold = 0.470;
+			break;
+		case 2:
+			threshold = 0.770;
+			break;
+		default:
+			return 1;
+	}
 
-        // Determines if input is valid or not
-        switch (input) {
-                case 0:
-                        threshold = 0.170;
-                        break;
-                case 1:
-                        threshold = 0.470;
-                        break;
-                case 2:
-                        threshold = 0.770;
-                        break;
-                default:
-                        return 1;
-        }
+	// Loops around for one second, creates 100Hz tone for given time
+	for (i = 0; i < (short int)(100 * threshold); i++) {
+		gpio_direction_output(WWV_GPIO_4, 1);
+		usleep_range(4900, 5100);
+		gpio_direction_output(WWV_GPIO_4, 0);
+		usleep_range(4900, 5100);
+	}
 
-        // Loops around for one second, creates 100Hz tone for given time
-        for (uint32_t i = 0; i < (uint32_t)(100 * threshold); i++) {
-                        gpio_value(pin, 1);
-                        usleep(5000);
-                        gpio_value(pin, 0);
-                        usleep(5000);
-        }
+	// Unexport pin after use
+	min_sleep = 690000 - 1000 * threshold;
+	max_sleep = 710000 - 1000 * threshold;
+	usleep_range(min_sleep, max_sleep);
 
-        // Unexport pin after use
-        usleep(700000 - 1000 * threshold);
-
-        return 0;
+	return 0;
 }
 
 
@@ -166,6 +161,15 @@ static long wwv_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
 	long ret=0;					// Return value
 	struct wwv_data_t *wwv_dat;	// Driver data - has gpio pins
 	
+	if ((filp->f_flags & O_NONBLOCK) && 0) {
+		ret = -EALREADY;
+		goto fail;
+	} else if (0) {
+		ret = -EBUSY;
+		goto fail;
+	}
+
+
 	// Get our driver data
 	wwv_dat=(struct wwv_data_t *)filp->private_data;
 
