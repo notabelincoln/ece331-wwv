@@ -294,7 +294,7 @@ static long wwv_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 		case WWV_TRANSMIT:
 			// PLACE A CALL TO YOUR FUNCTION AFTER THIS LINE
-			wwv_transmit(0xffffffff);
+			wwv_transmit(*data_buff);
 			break;
 		default:
 			ret=-EINVAL;
