@@ -138,10 +138,15 @@ static int wwv_encode(int pin, int input)
 	return 0;
 }
 
-int main(unsigned int input_data)
+int wwv_transmit(unsigned int input_data)
 {
 	short int  mask;
 	short int yy, dd, hh, mi;
+
+	yy = input_data >> (8 * 3) & 0x00F0; // year is encoded in last 4 bits
+	dd = input_data >> (8 * 2) & 0x0FFF; // day of year is encoded in next 12 bits
+	hh = input_data >> (8) & 0x000F; // hour is encoded in 2nd least significant byte
+	mi = input_data & 0x0F; // minute is encoded in least significant byte
 
 	// SEGMENT 1, TIME INDEX 0 - 9
 	
@@ -152,7 +157,7 @@ int main(unsigned int input_data)
 	mask = 0x01;
 	for (int i = 4; i < 8; i++) {
 		data = mask & (yy % 10);
-		encode(4, (bool)data);
+		encode(4, (_Bool)data);
 		mask <<= 1;
 	}
 	// P1 identifier sequence
@@ -166,7 +171,7 @@ int main(unsigned int input_data)
 	mask = 0x01;
 	for (int i = 10; i < 14; i++) {
 		data = mask & (mi % 10);
-		encode(4, (bool)data);
+		encode(4, (_Bool)data);
 		mask <<= 1;
 	}
 	encode(4, 0);
@@ -174,7 +179,7 @@ int main(unsigned int input_data)
 	mask = 0x01;
 	for (int i = 15; i < 18; i++) {
 		data = mask & (mi / 10);
-		encode(4, (bool)data);
+		encode(4, (_Bool)data);
 		mask <<= 1;
 	}
 	// P2 identifier sequence
@@ -189,7 +194,7 @@ int main(unsigned int input_data)
 	mask = 0x01;
 	for (int i = 20; i < 24; i++) {
 		data = mask & (hh % 10);
-		encode(4, (bool)data);
+		encode(4, (_Bool)data);
 		mask <<= 1;
 	}
 	encode(4, 0);
@@ -198,7 +203,7 @@ int main(unsigned int input_data)
 	mask = 0x01;
 	for (int i = 25; i < 28; i++) {
 		data = mask & (hh / 10);
-		encode(4, (bool)data);
+		encode(4, (_Bool)data);
 		mask <<= 1;
 	}
 	// P3 identifier sequence
@@ -213,7 +218,7 @@ int main(unsigned int input_data)
 	mask = 0x01;
 	for (int i = 30; i < 34; i++) {
 		data = mask & (dd % 10);
-		encode(4, (bool)data);
+		encode(4, (_Bool)data);
 		mask <<= 1;
 	}
 	encode(4, 0);
@@ -222,7 +227,7 @@ int main(unsigned int input_data)
 	mask = 0x01;
 	for (int i = 35; i < 39; i++) {
 		data = mask & ((dd % 100) / 10);
-		encode(4, (bool)data);
+		encode(4, (_Bool)data);
 		mask <<= 1;
 	}
 	// P4 identifier
@@ -236,7 +241,7 @@ int main(unsigned int input_data)
 	mask = 0x01;
 	for (int i = 40; i < 42; i++) {
 		data = mask & (dd / 100);
-		encode(4, (bool)data);
+		encode(4, (_Bool)data);
 		mask <<= 1;
 	}
 	// Encode zero bits
@@ -281,7 +286,7 @@ static long wwv_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 		case WWV_TRANSMIT:
 			// PLACE A CALL TO YOUR FUNCTION AFTER THIS LINE
-			
+			wwv_transmit(0xFFFFFFFF);
 			break;
 		default:
 			ret=-EINVAL;
