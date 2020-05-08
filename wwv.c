@@ -101,7 +101,7 @@ static struct wwv_data_t *wwv_data_fops;
 // ADD YOUR WWV ENCODING/TRANSMITING/MANAGEMENT FUNCTIONS BELOW THIS LINE
 
 // Outputs LED signal representing bit in wwv format, 2 meaning position identfier
-static int wwv_encode(int pin, int input)
+static int encode(int pin, int input)
 {
 	float threshold;	// How long to play the 100Hz tone in seconds
 	long int min_sleep, max_sleep;		// Min/max sleep times for remainder of second
@@ -141,7 +141,9 @@ static int wwv_encode(int pin, int input)
 int wwv_transmit(unsigned int input_data)
 {
 	short int  mask;
+	short int data;
 	short int yy, dd, hh, mi;
+	unsigned short int i;
 
 	yy = input_data >> (8 * 3) & 0x00F0; // year is encoded in last 4 bits
 	dd = input_data >> (8 * 2) & 0x0FFF; // day of year is encoded in next 12 bits
@@ -151,13 +153,13 @@ int wwv_transmit(unsigned int input_data)
 	// SEGMENT 1, TIME INDEX 0 - 9
 	
 	// First three fields are zero
-	for (int i = 1; i < 4; i++)
+	for (i = 1; i < 4; i++)
 		encode(4, 0);
 	// Year ones place encoding
 	mask = 0x01;
-	for (int i = 4; i < 8; i++) {
+	for (i = 4; i < 8; i++) {
 		data = mask & (yy % 10);
-		encode(4, (_Bool)data);
+		encode(4, data ? 1 : 0);
 		mask <<= 1;
 	}
 	// P1 identifier sequence
@@ -169,17 +171,17 @@ int wwv_transmit(unsigned int input_data)
 	
 	// Minute one's encoding
 	mask = 0x01;
-	for (int i = 10; i < 14; i++) {
+	for (i = 10; i < 14; i++) {
 		data = mask & (mi % 10);
-		encode(4, (_Bool)data);
+		encode(4, data ? 1 : 0);
 		mask <<= 1;
 	}
 	encode(4, 0);
 	// Minute ten's encoding
 	mask = 0x01;
-	for (int i = 15; i < 18; i++) {
+	for (i = 15; i < 18; i++) {
 		data = mask & (mi / 10);
-		encode(4, (_Bool)data);
+		encode(4, data ? 1 : 0);
 		mask <<= 1;
 	}
 	// P2 identifier sequence
@@ -192,18 +194,18 @@ int wwv_transmit(unsigned int input_data)
 	
 	// Hour one's encoding
 	mask = 0x01;
-	for (int i = 20; i < 24; i++) {
+	for ( i = 20; i < 24; i++) {
 		data = mask & (hh % 10);
-		encode(4, (_Bool)data);
+		encode(4, data ? 1 : 0);
 		mask <<= 1;
 	}
 	encode(4, 0);
 
 	// Hour ten's encoding
 	mask = 0x01;
-	for (int i = 25; i < 28; i++) {
+	for (i = 25; i < 28; i++) {
 		data = mask & (hh / 10);
-		encode(4, (_Bool)data);
+		encode(4, data ? 1 : 0);
 		mask <<= 1;
 	}
 	// P3 identifier sequence
@@ -216,18 +218,18 @@ int wwv_transmit(unsigned int input_data)
 	
 	// Day of year one's encoding
 	mask = 0x01;
-	for (int i = 30; i < 34; i++) {
+	for (i = 30; i < 34; i++) {
 		data = mask & (dd % 10);
-		encode(4, (_Bool)data);
+		encode(4, data ? 1 : 0);
 		mask <<= 1;
 	}
 	encode(4, 0);
 
 	// Day of year ten's encoding
 	mask = 0x01;
-	for (int i = 35; i < 39; i++) {
+	for (i = 35; i < 39; i++) {
 		data = mask & ((dd % 100) / 10);
-		encode(4, (_Bool)data);
+		encode(4, data ? 1 : 0);
 		mask <<= 1;
 	}
 	// P4 identifier
@@ -239,19 +241,19 @@ int wwv_transmit(unsigned int input_data)
 	
 	// Day of year hundred's encoding
 	mask = 0x01;
-	for (int i = 40; i < 42; i++) {
+	for (i = 40; i < 42; i++) {
 		data = mask & (dd / 100);
-		encode(4, (_Bool)data);
+		encode(4, data ? 1 : 0);
 		mask <<= 1;
 	}
 	// Encode zero bits
-	for (int i = 42; i < 45; i++)
+	for (i = 42; i < 45; i++)
 		encode(4, 0);
 
 	//gpio_unexport(4);
 
 	// Rest of values are just zero
-	sleep(15);
+	msleep(15000);
 
 	return 0;
 }
