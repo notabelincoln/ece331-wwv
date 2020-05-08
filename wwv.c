@@ -101,7 +101,7 @@ static struct wwv_data_t *wwv_data_fops;
 // ADD YOUR WWV ENCODING/TRANSMITING/MANAGEMENT FUNCTIONS BELOW THIS LINE
 
 // Outputs LED signal representing bit in wwv format, 2 meaning position identfier
-static int encode(int pin, int input)
+static int wwv_encode(int pin, int input)
 {
 	float threshold;	// How long to play the 100Hz tone in seconds
 	long int min_sleep, max_sleep;		// Min/max sleep times for remainder of second
@@ -140,7 +140,6 @@ static int encode(int pin, int input)
 
 int wwv_transmit(unsigned int input_data)
 {
-	short int  mask;
 	short int data;
 	short int yy, dd, hh, mi;
 	unsigned short int i;
@@ -154,101 +153,93 @@ int wwv_transmit(unsigned int input_data)
 	
 	// First three fields are zero
 	for (i = 1; i < 4; i++)
-		encode(4, 0);
+		wwv_encode(4, 0);
 	// Year ones place encoding
-	mask = 0x01;
+	data = yy % 10;
 	for (i = 4; i < 8; i++) {
-		data = mask & (yy % 10);
-		encode(4, data ? 1 : 0);
-		mask <<= 1;
+		wwv_encode(4, data & 0x01);
+		data >>= 1;
 	}
 	// P1 identifier sequence
-	encode(4, 0);
-	encode(4, 2);
+	wwv_encode(4, 0);
+	wwv_encode(4, 2);
 	
 
 	// SEGMENT 2, TIME INDEX 10 - 19
 	
 	// Minute one's encoding
-	mask = 0x01;
+	data = mi % 10;
 	for (i = 10; i < 14; i++) {
-		data = mask & (mi % 10);
-		encode(4, data ? 1 : 0);
-		mask <<= 1;
+		wwv_encode(4, data & 0x01);
+		data >>= 1;
 	}
-	encode(4, 0);
+	wwv_encode(4, 0);
 	// Minute ten's encoding
-	mask = 0x01;
+	data = mi / 10;
 	for (i = 15; i < 18; i++) {
-		data = mask & (mi / 10);
-		encode(4, data ? 1 : 0);
-		mask <<= 1;
+		wwv_encode(4, data & 0x01);
+		data >>= 1;
 	}
 	// P2 identifier sequence
-	encode(4, 0);
-	encode(4, 2);
+	wwv_encode(4, 0);
+	wwv_encode(4, 2);
 
 
 
 	// SEGMENT 3, TIME INDEX 20 - 29
 	
 	// Hour one's encoding
-	mask = 0x01;
+	data = hh % 10;
 	for ( i = 20; i < 24; i++) {
-		data = mask & (hh % 10);
-		encode(4, data ? 1 : 0);
-		mask <<= 1;
+		wwv_encode(4, data & 0x01);
+		data >>= 1;
 	}
-	encode(4, 0);
+	wwv_encode(4, 0);
 
 	// Hour ten's encoding
-	mask = 0x01;
+	data = hh / 10;
 	for (i = 25; i < 28; i++) {
-		data = mask & (hh / 10);
-		encode(4, data ? 1 : 0);
-		mask <<= 1;
+		wwv_encode(4, data & 0x01);
+		data >>= 1;
 	}
 	// P3 identifier sequence
-	encode(4, 0);
-	encode(4, 2);
+	wwv_encode(4, 0);
+	wwv_encode(4, 2);
 
 
 
 	// SEGMENT 4, TIME INDEX 30 - 39
 	
 	// Day of year one's encoding
-	mask = 0x01;
+	data = dd % 10;
 	for (i = 30; i < 34; i++) {
-		data = mask & (dd % 10);
-		encode(4, data ? 1 : 0);
-		mask <<= 1;
+		wwv_encode(4, data & 0x01);
+		data >>= 1;
 	}
-	encode(4, 0);
+	wwv_encode(4, 0);
 
 	// Day of year ten's encoding
-	mask = 0x01;
+	data = ((dd % 100) / 10);
 	for (i = 35; i < 39; i++) {
-		data = mask & ((dd % 100) / 10);
-		encode(4, data ? 1 : 0);
-		mask <<= 1;
+		wwv_encode(4, data & 0x01);
+		data >>= 1;
 	}
 	// P4 identifier
-	encode(4, 2);
+	wwv_encode(4, 2);
 
 
 
 	//SEGMENT 5, TIME INDEX 40 - 49
 	
 	// Day of year hundred's encoding
-	mask = 0x01;
+	data = dd / 100;
 	for (i = 40; i < 42; i++) {
-		data = mask & (dd / 100);
-		encode(4, data ? 1 : 0);
-		mask <<= 1;
+		wwv_encode(4, data & 0x01);
+		data >>= 1;
 	}
 	// Encode zero bits
 	for (i = 42; i < 45; i++)
-		encode(4, 0);
+		wwv_encode(4, 0);
 
 	//gpio_unexport(4);
 
@@ -278,8 +269,8 @@ static long wwv_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
 	struct wwv_data_t *wwv_dat;	// Driver data - has gpio pins
 	
 	// Check if pins are being used and if file was opened O_NONBLOCK
-	if (gpio_request(WWV_GPIO_4,"wwv") && (filp->f_flags & O_NONBLOCK))
-		return -EFAULT;
+	//if (gpio_request(WWV_GPIO_4,"wwv") && (filp->f_flags & O_NONBLOCK))
+	//	return -EFAULT;
 
 	// Get our driver data
 	wwv_dat=(struct wwv_data_t *)filp->private_data;
@@ -288,7 +279,6 @@ static long wwv_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 		case WWV_TRANSMIT:
 			// PLACE A CALL TO YOUR FUNCTION AFTER THIS LINE
-			wwv_transmit(0xFFFFFFFF);
 			break;
 		default:
 			ret=-EINVAL;
