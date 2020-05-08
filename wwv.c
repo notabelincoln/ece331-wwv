@@ -161,14 +161,9 @@ static long wwv_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
 	long ret=0;					// Return value
 	struct wwv_data_t *wwv_dat;	// Driver data - has gpio pins
 	
-	if ((filp->f_flags & O_NONBLOCK) && 0) {
-		ret = -EALREADY;
-		goto fail;
-	} else if (0) {
-		ret = -EBUSY;
-		goto fail;
-	}
-
+	// Check if pins are being used and if file was opened O_NONBLOCK
+	if (gpio_request(WWV_GPIO_4,"wwv") && (filp->f_flags & O_NONBLOCK))
+		return -EFAULT;
 
 	// Get our driver data
 	wwv_dat=(struct wwv_data_t *)filp->private_data;
