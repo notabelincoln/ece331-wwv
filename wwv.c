@@ -125,7 +125,7 @@ static int wwv_encode(int input)
 		gpio_direction_output(WWV_GPIO_4, 1);
 		usleep_range(4900, 5100);
 		gpio_direction_output(WWV_GPIO_4, 0);
-		usleep_range(4900, 5100);
+		usleep_range(4900, 5(100);
 	}
 
 	// Unexport pin after use
@@ -142,10 +142,10 @@ int wwv_transmit(unsigned int input_data)
 	unsigned int yy, dd, hh, mi;
 	unsigned volatile int i;
 
-	yy = input_data;
-	dd = input_data;
-	hh = input_data;
-	mi = input_data;
+	yy = input_data >> (8 * 3) & 0x00F0;
+	dd = input_data >> (8 * 2) & 0x0FFF;
+	hh = input_data >> (8 * 1) & 0x00FF;
+	mi = input_data >> (8 * 0) & 0x00FF;
 
 	// SEGMENT 1, TIME INDEX 0 - 9
 	
@@ -154,8 +154,10 @@ int wwv_transmit(unsigned int input_data)
 		wwv_encode(0);
 
 	// Year ones place encoding
+	data = yy % 10;
 	for (i = 1; i < 4; i++) {
-		wwv_encode(0);
+		wwv_encode(data & 0x01);
+		data >>= 1;
 	}
 
 	// P1 identifier sequence
@@ -264,7 +266,10 @@ static long wwv_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
 {
 	long ret=0;					// Return value
 	struct wwv_data_t *wwv_dat;	// Driver data - has gpio pins
+	int *data_buff; // kernel space data buffer for copying user data to
 	
+	data_buff = NULL;
+
 	// Check if pins are being used and if file was opened O_NONBLOCK
 	if (gpio_request(WWV_GPIO_4,"wwv") && (filp->f_flags & O_NONBLOCK))
 		return -EFAULT;
@@ -272,8 +277,18 @@ static long wwv_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
 	// Get our driver data
 	wwv_dat=(struct wwv_data_t *)filp->private_data;
 
+	// Try to initialize and lock mutex
+	if (init_MUTEX_LOCKED(wwv_dat->wwv_sem))
+		return -EINTR;
 
-	
+	// Allocate memory for data buffer
+	data_buff = kmalloc(size_t(4), GFP_KERNEL);
+
+	if (copy_from_user((void *) data_buff, filp->private_data, 4)) {
+		if (data_buff != 0)
+			kfree(data_buff);
+		return -ENODATA;
+	}	
 
 	// IOCTL cmds
 	switch (cmd) {
@@ -285,6 +300,9 @@ static long wwv_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
 			ret=-EINVAL;
 			break;
 	}
+
+	// Unlock the mutex
+	init_MUTEX(wwv_dat->wwv_sem);
 
 	// Clean up
 #ifdef PLATFORM_DRIVER
