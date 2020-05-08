@@ -101,7 +101,7 @@ static struct wwv_data_t *wwv_data_fops;
 // ADD YOUR WWV ENCODING/TRANSMITING/MANAGEMENT FUNCTIONS BELOW THIS LINE
 
 // Outputs LED signal representing bit in wwv format, 2 meaning position identfier
-static int wwv_encode(int pin, int input)
+static int wwv_encode(int input)
 {
 	float threshold;	// How long to play the 100Hz tone in seconds
 	long int min_sleep, max_sleep;		// Min/max sleep times for remainder of second
@@ -112,18 +112,16 @@ static int wwv_encode(int pin, int input)
 		case 0:
 			threshold = 0.170;
 			break;
-		case 1:
-			threshold = 0.470;
-			break;
 		case 2:
 			threshold = 0.770;
 			break;
 		default:
-			return 1;
+			threshold = 0.470;
+			break;
 	}
 
 	// Loops around for one second, creates 100Hz tone for given time
-	for (i = 0; i < (short int)(100 * threshold); i++) {
+	for (i = 0; i < (int)(100 * threshold); i++) {
 		gpio_direction_output(WWV_GPIO_4, 1);
 		usleep_range(4900, 5100);
 		gpio_direction_output(WWV_GPIO_4, 0);
@@ -140,30 +138,29 @@ static int wwv_encode(int pin, int input)
 
 int wwv_transmit(unsigned int input_data)
 {
-	short int data;
-	short int yy, dd, hh, mi;
-	unsigned short int i;
+	unsigned int data;
+	unsigned int yy, dd, hh, mi;
+	unsigned volatile int i;
 
-	yy = input_data >> (8 * 3) & 0x00F0; // year is encoded in last 4 bits
-	dd = input_data >> (8 * 2) & 0x0FFF; // day of year is encoded in next 12 bits
-	hh = input_data >> (8) & 0x000F; // hour is encoded in 2nd least significant byte
-	mi = input_data & 0x0F; // minute is encoded in least significant byte
+	yy = input_data;
+	dd = input_data;
+	hh = input_data;
+	mi = input_data;
 
 	// SEGMENT 1, TIME INDEX 0 - 9
 	
 	// First three fields are zero
 	for (i = 1; i < 4; i++)
-		wwv_encode(4, 0);
+		wwv_encode(0);
+
 	// Year ones place encoding
-	data = yy % 10;
-	for (i = 4; i < 8; i++) {
-		wwv_encode(4, data & 0x01);
-		data >>= 1;
+	for (i = 1; i < 4; i++) {
+		wwv_encode(0);
 	}
+
 	// P1 identifier sequence
-	wwv_encode(4, 0);
-	wwv_encode(4, 2);
-	
+	wwv_encode(0);
+	wwv_encode(2);	
 
 	// SEGMENT 2, TIME INDEX 10 - 19
 	
@@ -222,7 +219,7 @@ int wwv_transmit(unsigned int input_data)
 	data = ((dd % 100) / 10);
 	for (i = 35; i < 39; i++) {
 		wwv_encode(4, data & 0x01);
-		data >>= 1;
+	//	data >>= 1;
 	}
 	// P4 identifier
 	wwv_encode(4, 2);
@@ -269,16 +266,20 @@ static long wwv_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
 	struct wwv_data_t *wwv_dat;	// Driver data - has gpio pins
 	
 	// Check if pins are being used and if file was opened O_NONBLOCK
-	//if (gpio_request(WWV_GPIO_4,"wwv") && (filp->f_flags & O_NONBLOCK))
-	//	return -EFAULT;
+	if (gpio_request(WWV_GPIO_4,"wwv") && (filp->f_flags & O_NONBLOCK))
+		return -EFAULT;
 
 	// Get our driver data
 	wwv_dat=(struct wwv_data_t *)filp->private_data;
+
+
+	
 
 	// IOCTL cmds
 	switch (cmd) {
 		case WWV_TRANSMIT:
 			// PLACE A CALL TO YOUR FUNCTION AFTER THIS LINE
+			wwv_transmit(0xffffffff);
 			break;
 		default:
 			ret=-EINVAL;
