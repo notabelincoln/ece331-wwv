@@ -138,9 +138,118 @@ static int wwv_encode(int pin, int input)
 	return 0;
 }
 
+int main(unsigned int input_data)
+{
+	short int  mask;
+	short int yy, dd, hh, mi;
+
+	// SEGMENT 1, TIME INDEX 0 - 9
+	
+	// First three fields are zero
+	for (int i = 1; i < 4; i++)
+		encode(4, 0);
+	// Year ones place encoding
+	mask = 0x01;
+	for (int i = 4; i < 8; i++) {
+		data = mask & (yy % 10);
+		encode(4, (bool)data);
+		mask <<= 1;
+	}
+	// P1 identifier sequence
+	encode(4, 0);
+	encode(4, 2);
+	
+
+	// SEGMENT 2, TIME INDEX 10 - 19
+	
+	// Minute one's encoding
+	mask = 0x01;
+	for (int i = 10; i < 14; i++) {
+		data = mask & (mi % 10);
+		encode(4, (bool)data);
+		mask <<= 1;
+	}
+	encode(4, 0);
+	// Minute ten's encoding
+	mask = 0x01;
+	for (int i = 15; i < 18; i++) {
+		data = mask & (mi / 10);
+		encode(4, (bool)data);
+		mask <<= 1;
+	}
+	// P2 identifier sequence
+	encode(4, 0);
+	encode(4, 2);
 
 
 
+	// SEGMENT 3, TIME INDEX 20 - 29
+	
+	// Hour one's encoding
+	mask = 0x01;
+	for (int i = 20; i < 24; i++) {
+		data = mask & (hh % 10);
+		encode(4, (bool)data);
+		mask <<= 1;
+	}
+	encode(4, 0);
+
+	// Hour ten's encoding
+	mask = 0x01;
+	for (int i = 25; i < 28; i++) {
+		data = mask & (hh / 10);
+		encode(4, (bool)data);
+		mask <<= 1;
+	}
+	// P3 identifier sequence
+	encode(4, 0);
+	encode(4, 2);
+
+
+
+	// SEGMENT 4, TIME INDEX 30 - 39
+	
+	// Day of year one's encoding
+	mask = 0x01;
+	for (int i = 30; i < 34; i++) {
+		data = mask & (dd % 10);
+		encode(4, (bool)data);
+		mask <<= 1;
+	}
+	encode(4, 0);
+
+	// Day of year ten's encoding
+	mask = 0x01;
+	for (int i = 35; i < 39; i++) {
+		data = mask & ((dd % 100) / 10);
+		encode(4, (bool)data);
+		mask <<= 1;
+	}
+	// P4 identifier
+	encode(4, 2);
+
+
+
+	//SEGMENT 5, TIME INDEX 40 - 49
+	
+	// Day of year hundred's encoding
+	mask = 0x01;
+	for (int i = 40; i < 42; i++) {
+		data = mask & (dd / 100);
+		encode(4, (bool)data);
+		mask <<= 1;
+	}
+	// Encode zero bits
+	for (int i = 42; i < 45; i++)
+		encode(4, 0);
+
+	//gpio_unexport(4);
+
+	// Rest of values are just zero
+	sleep(15);
+
+	return 0;
+}
 
 // ioctl system call
 // If another process is using the pins and the device was opened O_NONBLOCK
